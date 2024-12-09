@@ -1,0 +1,9 @@
+[package]
+name = "tls-bench"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+rustls = { version = "0.23.17", default-features = false, features = ["std"] }
+tokio-rustls = "0.26.0"
