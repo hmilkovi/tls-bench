@@ -96,6 +96,20 @@ async fn handshake(
     })
 }
 
+async fn handshake_with_timeout(
+    host: &str,
+    port: u16,
+    is_smtp: bool,
+    tls_config: ClientConfig,
+    timeout_ms: u64,
+) -> Result<TlsDuration, Error> {
+    let handshake_timeout = timeout(
+        Duration::from_millis(timeout_ms),
+        handshake(host, port, is_smtp, tls_config),
+    );
+    handshake_timeout.await?
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -109,7 +123,7 @@ mod tests {
     #[tokio::test]
     async fn test_handshake() {
         let config = tls_config(Some(false), Some(&[&rustls::version::TLS12]));
-        let result = handshake("dns.google", 443, false, config).await;
+        let result = handshake_with_timeout("dns.google", 443, false, config, 100).await;
         assert!(result.is_ok());
 
         let duration = result.unwrap();
@@ -117,5 +131,16 @@ mod tests {
 
         assert!(duration.tcp_connect > now.elapsed());
         assert!(duration.handshake > now.elapsed());
+    }
+
+    #[tokio::test]
+    async fn test_handshake_timeout() {
+        let config = tls_config(Some(false), Some(&[&rustls::version::TLS12]));
+        let result = handshake_with_timeout("127.0.0.1", 8000, false, config, 10).await;
+        assert!(result.is_err());
+        assert_eq!(
+            &result.err().unwrap().to_string(),
+            "Connection refused (os error 61)"
+        );
     }
 }
