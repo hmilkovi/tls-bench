@@ -1,5 +1,7 @@
 use clap::Parser;
 
+mod tls;
+
 /// Simple program to greet a person
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
