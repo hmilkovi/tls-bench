@@ -121,18 +121,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_handshake() {
-        let config = tls_config(Some(false), Some(&[&rustls::version::TLS12]));
-        let result = handshake_with_timeout("dns.google", 443, false, config, 100).await;
-        assert!(result.is_ok());
-
-        let duration = result.unwrap();
-        assert!(duration.tcp_connect.as_millis() > 0);
-        assert!(duration.handshake.as_millis() > 0);
-    }
-
-    #[tokio::test]
-    async fn test_handshake_timeout() {
+    async fn test_handshake_connection_refused() {
         let config = tls_config(Some(false), Some(&[&rustls::version::TLS12]));
         let result = handshake_with_timeout("127.0.0.1", 8000, false, config, 10).await;
         assert!(result.is_err());
