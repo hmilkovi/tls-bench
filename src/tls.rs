@@ -127,10 +127,8 @@ mod tests {
         assert!(result.is_ok());
 
         let duration = result.unwrap();
-        let now = Instant::now();
-
-        assert!(duration.tcp_connect > now.elapsed());
-        assert!(duration.handshake > now.elapsed());
+        assert!(duration.tcp_connect.as_millis() > 0);
+        assert!(duration.handshake.as_millis() > 0);
     }
 
     #[tokio::test]
@@ -138,9 +136,10 @@ mod tests {
         let config = tls_config(Some(false), Some(&[&rustls::version::TLS12]));
         let result = handshake_with_timeout("127.0.0.1", 8000, false, config, 10).await;
         assert!(result.is_err());
-        assert_eq!(
-            &result.err().unwrap().to_string(),
-            "Connection refused (os error 61)"
-        );
+        assert!(&result
+            .err()
+            .unwrap()
+            .to_string()
+            .contains("Connection refused"));
     }
 }
