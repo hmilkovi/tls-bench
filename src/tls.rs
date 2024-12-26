@@ -14,9 +14,9 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::time::{timeout, Duration, Instant};
 
-struct TlsDuration {
-    tcp_connect: Duration,
-    handshake: Duration,
+pub struct TlsDuration {
+    pub tcp_connect: Duration,
+    pub handshake: Duration,
 }
 
 pub fn tls_config(
@@ -96,7 +96,7 @@ async fn handshake(
     })
 }
 
-async fn handshake_with_timeout(
+pub async fn handshake_with_timeout(
     host: &str,
     port: u16,
     is_smtp: bool,
