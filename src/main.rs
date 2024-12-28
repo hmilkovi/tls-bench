@@ -31,6 +31,10 @@ struct Args {
     /// Max concurrently running, defaults to available_parallelism
     #[arg(short, long, default_value_t = available_parallelism().unwrap().get())]
     concurrently: usize,
+
+    /// Timeout of tcp connection & tls handshake in miliseconds
+    #[arg(long, default_value_t = 1000)]
+    timeout_ms: u64,
 }
 
 #[derive(clap::ValueEnum, Clone)]
@@ -90,15 +94,21 @@ async fn main() {
                     port,
                     is_smtp,
                     local_tls_config.clone(),
-                    4000,
+                    args.timeout_ms,
                 )
-                .await
-                .unwrap();
+                .await;
+
+                if result.is_err() {
+                    println!("error: {:?}", result.err().unwrap().to_string());
+                    continue;
+                }
+
+                let duration = result.unwrap();
 
                 println!(
                     "handshake/tcp_connect in ms -> {}/{}",
-                    result.handshake.as_millis(),
-                    result.tcp_connect.as_millis()
+                    duration.handshake.as_millis(),
+                    duration.tcp_connect.as_millis()
                 );
 
                 if now.elapsed().as_secs() >= args.duration {
