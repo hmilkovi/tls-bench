@@ -2,6 +2,9 @@
 name = "tls-bench"
 version = "0.1.0"
 edition = "2021"
+description = "TLS benchmarking tool for evaluating server performance"
+authors = ["Hrvoje <hmilkovi@gmail.com>"]
+readme = "README.md"
 
 [dependencies]
 tokio = { version = "1", features = ["full"] }

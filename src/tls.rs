@@ -14,6 +14,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::time::{timeout, Duration, Instant};
 
+#[derive(Debug)]
 pub struct TlsDuration {
     pub tcp_connect: Duration,
     pub handshake: Duration,
