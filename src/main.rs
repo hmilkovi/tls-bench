@@ -1,6 +1,7 @@
 use clap::Parser;
-use std::{sync::Arc, thread::available_parallelism, time::Duration};
+use std::{io, net::SocketAddr, sync::Arc, thread::available_parallelism, time::Duration};
 use tokio::{
+    net,
     sync::Mutex,
     task::JoinSet,
     time::{interval, Instant},
@@ -13,8 +14,8 @@ mod tls;
 #[command(version, about, long_about = None)]
 struct Cli {
     /// Endpoint to run TLS benchmark against
-    #[arg(short, long, value_parser = parse_endpoint)]
-    endpoint: Option<(String, u16)>,
+    #[arg(short, long)]
+    endpoint: String,
 
     /// Protocol to use when runing TLS benchmark
     #[arg(short, value_enum, default_value_t = Protocol::Tcp)]
@@ -57,19 +58,8 @@ enum TlsVersion {
     Tls13,
 }
 
-fn parse_endpoint(input: &str) -> Result<(String, u16), String> {
-    let mut split = input.split(':');
-    let host = split.next().ok_or("missing host")?.to_string();
-    let port = split
-        .next()
-        .ok_or("missing port")?
-        .parse::<u16>()
-        .map_err(|_| "invalid port")?;
-    Ok((host, port))
-}
-
 #[tokio::main]
-async fn main() {
+async fn main() -> io::Result<()> {
     let cli = Cli::parse();
 
     let mut tls_config = tls::tls_config(Some(cli.zero_rtt), Some(&[&rustls::version::TLS12]));
@@ -86,8 +76,11 @@ async fn main() {
         _ => {}
     }
 
-    let now = Instant::now();
-    let endpoint = cli.endpoint.unwrap();
+    let endpoint: SocketAddr = net::lookup_host(cli.endpoint)
+        .await?
+        .into_iter()
+        .nth(0)
+        .unwrap();
 
     let mut tasks = JoinSet::new();
 
@@ -100,16 +93,16 @@ async fn main() {
     let rate_limiter = Arc::new(Mutex::new(interval(limiter_period)));
 
     for _ in 0..cli.concurrently {
-        let host = endpoint.clone().0.leak();
-        let port = endpoint.1;
         let local_tls_config = tls_config.clone();
         let throttle = Arc::clone(&rate_limiter);
+        let now = Instant::now();
+        let host = endpoint.ip();
         tasks.spawn(async move {
             let mut results: Vec<tls::TlsDuration> = Vec::new();
             loop {
                 let result = tls::handshake_with_timeout(
                     host,
-                    port,
+                    endpoint.port(),
                     is_smtp,
                     local_tls_config.clone(),
                     cli.timeout_ms,
@@ -144,6 +137,7 @@ async fn main() {
 
     let data = tasks.join_all().await;
     println!("data: {:?}", data);
+    Ok(())
 }
 
 #[test]

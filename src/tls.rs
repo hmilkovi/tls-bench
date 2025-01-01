@@ -7,7 +7,7 @@ use tokio_rustls::rustls::{ClientConfig, RootCertStore};
 use tokio_rustls::TlsConnector;
 
 use std::io::{Error, ErrorKind};
-use std::str;
+use std::net::IpAddr;
 use std::sync::Arc;
 
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -44,7 +44,7 @@ pub fn tls_config(
 }
 
 async fn handshake(
-    host: &str,
+    host: IpAddr,
     port: u16,
     is_smtp: bool,
     tls_config: ClientConfig,
@@ -79,7 +79,7 @@ async fn handshake(
 
     let domain = ServerName::try_from(host);
     if domain.is_err() {
-        return Err(Error::new(ErrorKind::NotFound, "host can not be resolved"));
+        return Err(Error::new(ErrorKind::InvalidData, domain.err().unwrap()));
     }
 
     let tls_connector = TlsConnector::from(Arc::new(tls_config));
@@ -98,7 +98,7 @@ async fn handshake(
 }
 
 pub async fn handshake_with_timeout(
-    host: &str,
+    host: IpAddr,
     port: u16,
     is_smtp: bool,
     tls_config: ClientConfig,
@@ -124,7 +124,8 @@ mod tests {
     #[tokio::test]
     async fn test_handshake_connection_refused() {
         let config = tls_config(Some(false), Some(&[&rustls::version::TLS12]));
-        let result = handshake_with_timeout("127.0.0.1", 8000, false, config, 10).await;
+        let result =
+            handshake_with_timeout("127.0.0.1".parse().unwrap(), 8000, false, config, 10).await;
         assert!(result.is_err());
         assert!(&result
             .err()
