@@ -1,6 +1,10 @@
 use clap::Parser;
-use std::thread::available_parallelism;
-use tokio::{task::JoinSet, time::Instant};
+use std::{sync::Arc, thread::available_parallelism, time::Duration};
+use tokio::{
+    sync::Mutex,
+    task::JoinSet,
+    time::{interval, Instant},
+};
 
 mod tls;
 
@@ -28,13 +32,17 @@ struct Cli {
     #[arg(short, long, default_value_t = 0)]
     duration: u64,
 
-    /// Max concurrently running, defaults to available_parallelism
+    /// Max concurrently running workers, defaults to available_parallelism
     #[arg(short, long, default_value_t = available_parallelism().unwrap().get())]
     concurrently: usize,
 
     /// Timeout of tcp connection & tls handshake in miliseconds
     #[arg(long, default_value_t = 1000)]
     timeout_ms: u64,
+
+    /// Maximum TLS handshakes per seconds, defaults to zero which disables this throttle feature
+    #[arg(short, long, default_value_t = 0)]
+    max_handshakes_per_second: u64,
 }
 
 #[derive(clap::ValueEnum, Clone)]
@@ -83,10 +91,19 @@ async fn main() {
 
     let mut tasks = JoinSet::new();
 
+    let mut max_handshakes_per_second = 1;
+    if cli.max_handshakes_per_second > 0 {
+        max_handshakes_per_second = cli.max_handshakes_per_second;
+    }
+
+    let limiter_period = Duration::from_secs_f64(1.0 / max_handshakes_per_second as f64);
+    let rate_limiter = Arc::new(Mutex::new(interval(limiter_period)));
+
     for _ in 0..cli.concurrently {
         let host = endpoint.clone().0.leak();
         let port = endpoint.1;
         let local_tls_config = tls_config.clone();
+        let throttle = Arc::clone(&rate_limiter);
         tasks.spawn(async move {
             let mut results: Vec<tls::TlsDuration> = Vec::new();
             loop {
@@ -98,6 +115,10 @@ async fn main() {
                     cli.timeout_ms,
                 )
                 .await;
+
+                if cli.max_handshakes_per_second > 0 {
+                    throttle.lock().await.tick().await;
+                }
 
                 if result.is_err() {
                     println!("error: {:?}", result.err().unwrap().to_string());
