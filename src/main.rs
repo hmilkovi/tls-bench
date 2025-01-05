@@ -1,10 +1,17 @@
 use clap::Parser;
-use std::{io, net::SocketAddr, sync::Arc, thread::available_parallelism, time::Duration};
+use indicatif::{ProgressBar, ProgressStyle};
+use std::{
+    io,
+    net::SocketAddr,
+    sync::Arc,
+    thread::{self, available_parallelism},
+    time::Duration,
+};
 use tokio::{
     net,
     sync::Mutex,
-    task::JoinSet,
-    time::{interval, Instant},
+    task,
+    time::{self, interval, Instant},
 };
 
 mod tls;
@@ -62,6 +69,24 @@ enum TlsVersion {
 async fn main() -> io::Result<()> {
     let cli = Cli::parse();
 
+    let spinner_worker = task::spawn_blocking(move || {
+        let spinner_style = ProgressStyle::with_template(
+            "[{elapsed_precise}] {prefix:.bold.dim} {spinner} {wide_msg}",
+        )
+        .unwrap()
+        .tick_chars("⠁⠂⠄⡀⡈⡐⡠⣀⣁⣂⣄⣌⣔⣤⣥⣦⣮⣶⣷⣿⡿⠿⢟⠟⡛⠛⠫⢋⠋⠍⡉⠉⠑⠡⢁");
+        let spinner = ProgressBar::new_spinner();
+        spinner.set_style(spinner_style);
+
+        let now = Instant::now();
+        spinner.set_message("TLS Handshaking...");
+        while now.elapsed().as_secs() <= cli.duration {
+            thread::sleep(time::Duration::from_millis(100));
+            spinner.tick();
+        }
+        spinner.finish_with_message("calculating stats...");
+    });
+
     let mut tls_config = tls::tls_config(Some(cli.zero_rtt), Some(&[&rustls::version::TLS12]));
     match cli.tls_version {
         TlsVersion::Tls13 => {
@@ -82,8 +107,6 @@ async fn main() -> io::Result<()> {
         .nth(0)
         .unwrap();
 
-    let mut tasks = JoinSet::new();
-
     let mut max_handshakes_per_second = 1;
     if cli.max_handshakes_per_second > 0 {
         max_handshakes_per_second = cli.max_handshakes_per_second;
@@ -92,6 +115,7 @@ async fn main() -> io::Result<()> {
     let limiter_period = Duration::from_secs_f64(1.0 / max_handshakes_per_second as f64);
     let rate_limiter = Arc::new(Mutex::new(interval(limiter_period)));
 
+    let mut tasks = task::JoinSet::new();
     for _ in 0..cli.concurrently {
         let local_tls_config = tls_config.clone();
         let throttle = Arc::clone(&rate_limiter);
@@ -113,18 +137,9 @@ async fn main() -> io::Result<()> {
                     throttle.lock().await.tick().await;
                 }
 
-                if result.is_err() {
-                    println!("error: {:?}", result.err().unwrap().to_string());
-                    continue;
+                if result.is_ok() {
+                    results.push(result.unwrap());
                 }
-
-                results.push(result.unwrap());
-
-                println!(
-                    "handshake/tcp_connect in ms -> {}/{}",
-                    results.last().unwrap().handshake.as_millis(),
-                    results.last().unwrap().tcp_connect.as_millis()
-                );
 
                 if now.elapsed().as_secs() >= cli.duration {
                     break;
@@ -136,7 +151,10 @@ async fn main() -> io::Result<()> {
     }
 
     let data = tasks.join_all().await;
+    spinner_worker.await?;
+
     println!("data: {:?}", data);
+
     Ok(())
 }
 
