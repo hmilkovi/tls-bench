@@ -4,16 +4,18 @@ use std::{
     io,
     net::SocketAddr,
     sync::Arc,
-    thread::{self, available_parallelism},
+    thread::{available_parallelism, sleep},
     time::Duration,
+    u128,
 };
 use tokio::{
     net,
-    sync::Mutex,
+    sync::{mpsc, Mutex},
     task,
-    time::{self, interval, Instant},
+    time::{interval, Instant},
 };
 
+mod math;
 mod tls;
 
 /// Simple program to greet a person
@@ -68,8 +70,9 @@ enum TlsVersion {
 #[tokio::main]
 async fn main() -> io::Result<()> {
     let cli = Cli::parse();
+    let (tx, mut rx) = mpsc::unbounded_channel::<Result<tls::TlsDuration, std::io::Error>>();
 
-    let spinner_worker = task::spawn_blocking(move || {
+    let sync_worker = task::spawn_blocking(move || {
         let spinner_style = ProgressStyle::with_template(
             "[{elapsed_precise}] {prefix:.bold.dim} {spinner} {wide_msg}",
         )
@@ -78,13 +81,38 @@ async fn main() -> io::Result<()> {
         let spinner = ProgressBar::new_spinner();
         spinner.set_style(spinner_style);
 
-        let now = Instant::now();
-        spinner.set_message("TLS Handshaking...");
-        while now.elapsed().as_secs() <= cli.duration {
-            thread::sleep(time::Duration::from_millis(100));
+        let mut err_count = 0;
+        let mut handshakes_count = 0;
+        let mut handshake_latencies: Vec<u128> = Vec::new();
+        let mut tcp_connect_latencies: Vec<u128> = Vec::new();
+
+        while let Some(data) = rx.blocking_recv() {
             spinner.tick();
+            spinner.set_message(format!(
+                "TLS Handshaks: {} | errors: {}",
+                handshakes_count, err_count
+            ));
+            if data.is_err() {
+                err_count += 1;
+                continue;
+            }
+
+            handshakes_count += 1;
+            let latencies = data.unwrap();
+            handshake_latencies.push(latencies.handshake.as_millis());
+            tcp_connect_latencies.push(latencies.tcp_connect.as_millis());
         }
-        spinner.finish_with_message("calculating stats...");
+        spinner.set_message("calculating stats...");
+        spinner.enable_steady_tick(Duration::from_millis(200));
+        let handshake_latencies_median = math::median_nonempty(&mut handshake_latencies);
+        let tcp_connect_median = math::median_nonempty(&mut tcp_connect_latencies);
+        sleep(Duration::from_secs(1));
+        spinner.finish_and_clear();
+        println!(
+            "handshake_latencies_median: {:?}ms",
+            handshake_latencies_median
+        );
+        println!("tcp_connect_median: {:?}ms", tcp_connect_median);
     });
 
     let mut tls_config = tls::tls_config(Some(cli.zero_rtt), Some(&[&rustls::version::TLS12]));
@@ -121,8 +149,8 @@ async fn main() -> io::Result<()> {
         let throttle = Arc::clone(&rate_limiter);
         let now = Instant::now();
         let host = endpoint.ip();
+        let tx_result = tx.clone();
         tasks.spawn(async move {
-            let mut results: Vec<tls::TlsDuration> = Vec::new();
             loop {
                 let result = tls::handshake_with_timeout(
                     host,
@@ -133,27 +161,22 @@ async fn main() -> io::Result<()> {
                 )
                 .await;
 
+                let _ = tx_result.send(result);
+
                 if cli.max_handshakes_per_second > 0 {
                     throttle.lock().await.tick().await;
-                }
-
-                if result.is_ok() {
-                    results.push(result.unwrap());
                 }
 
                 if now.elapsed().as_secs() >= cli.duration {
                     break;
                 }
             }
-
-            results
         });
     }
 
-    let data = tasks.join_all().await;
-    spinner_worker.await?;
-
-    println!("data: {:?}", data);
+    tasks.join_all().await;
+    drop(tx);
+    sync_worker.await?;
 
     Ok(())
 }
