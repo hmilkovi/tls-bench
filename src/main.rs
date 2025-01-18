@@ -50,8 +50,8 @@ struct Cli {
     #[arg(long, default_value_t = 1000)]
     timeout_ms: u64,
 
-    /// Maximum TLS handshakes per seconds, defaults to zero which disables this throttle feature
-    #[arg(short, long, default_value_t = 0)]
+    /// Maximum TLS handshakes per seconds
+    #[arg(short, long, default_value_t = 1000)]
     max_handshakes_per_second: u64,
 }
 
@@ -135,12 +135,7 @@ async fn main() -> io::Result<()> {
         .nth(0)
         .unwrap();
 
-    let mut max_handshakes_per_second = 1;
-    if cli.max_handshakes_per_second > 0 {
-        max_handshakes_per_second = cli.max_handshakes_per_second;
-    }
-
-    let limiter_period = Duration::from_secs_f64(1.0 / max_handshakes_per_second as f64);
+    let limiter_period = Duration::from_secs_f64(1.0 / cli.max_handshakes_per_second as f64);
     let rate_limiter = Arc::new(Mutex::new(interval(limiter_period)));
 
     let mut tasks = task::JoinSet::new();
