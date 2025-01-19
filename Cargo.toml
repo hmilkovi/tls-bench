@@ -13,3 +13,4 @@ tokio-rustls = "0.26.0"
 webpki-roots = "0.26"
 clap = { version = "4.5.23", features = ["derive"] }
 indicatif = "0.17.9"
+comfy-table = "7.1.3"

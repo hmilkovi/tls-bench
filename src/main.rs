@@ -4,7 +4,7 @@ use std::{
     io,
     net::SocketAddr,
     sync::Arc,
-    thread::{available_parallelism, sleep},
+    thread::available_parallelism,
     time::Duration,
     u128,
 };
@@ -14,6 +14,7 @@ use tokio::{
     task,
     time::{interval, Instant},
 };
+use comfy_table::Table;
 
 mod math;
 mod tls;
@@ -67,6 +68,35 @@ enum TlsVersion {
     Tls13,
 }
 
+fn render_stats_table(handshake_latencies: &mut[u128], tcp_connect_latencies: &mut[u128]) {
+    handshake_latencies.sort();
+    tcp_connect_latencies.sort();
+    let mut table = Table::new();
+    let header = vec!["Latencies", "Min", "AVG","50th percentile/mean", "95th percentile", "99th percentile", "Max"];
+    table
+        .set_header(header)
+        .add_row(vec![
+            String::from("TLS Handshake"),
+            format!("{}ms", handshake_latencies[0]),
+            format!("{}ms", math::avg(handshake_latencies)),
+            format!("{}ms", math::percentile(handshake_latencies, 50.0) as f32),
+            format!("{}ms", math::percentile(handshake_latencies, 95.0) as f32),
+            format!("{}ms", math::percentile(handshake_latencies, 99.0) as f32),
+            format!("{}ms", handshake_latencies.last().unwrap()),
+        ])
+        .add_row(vec![
+            String::from("TCP Connect"),
+            format!("{}ms", tcp_connect_latencies[0]),
+            format!("{}ms", math::avg(tcp_connect_latencies)),
+            format!("{}ms", math::percentile(tcp_connect_latencies, 50.0) as f32),
+            format!("{}ms", math::percentile(tcp_connect_latencies, 95.0) as f32),
+            format!("{}ms", math::percentile(tcp_connect_latencies, 99.0) as f32),
+            format!("{}ms", tcp_connect_latencies.last().unwrap()),
+        ]);
+
+    println!("{table}");
+}
+
 #[tokio::main]
 async fn main() -> io::Result<()> {
     let cli = Cli::parse();
@@ -74,15 +104,15 @@ async fn main() -> io::Result<()> {
 
     let sync_worker = task::spawn_blocking(move || {
         let spinner_style = ProgressStyle::with_template(
-            "[{elapsed_precise}] {prefix:.bold.dim} {spinner} {wide_msg}",
+            "{prefix:.bold.dim} {spinner} {wide_msg}",
         )
         .unwrap()
         .tick_chars("⠁⠂⠄⡀⡈⡐⡠⣀⣁⣂⣄⣌⣔⣤⣥⣦⣮⣶⣷⣿⡿⠿⢟⠟⡛⠛⠫⢋⠋⠍⡉⠉⠑⠡⢁");
         let spinner = ProgressBar::new_spinner();
         spinner.set_style(spinner_style);
 
-        let mut err_count = 0;
-        let mut handshakes_count = 0;
+        let mut err_count: u128 = 0;
+        let mut handshakes_count: u128 = 0;
         let mut handshake_latencies: Vec<u128> = Vec::new();
         let mut tcp_connect_latencies: Vec<u128> = Vec::new();
 
@@ -102,17 +132,12 @@ async fn main() -> io::Result<()> {
             handshake_latencies.push(latencies.handshake.as_millis());
             tcp_connect_latencies.push(latencies.tcp_connect.as_millis());
         }
-        spinner.set_message("calculating stats...");
-        spinner.enable_steady_tick(Duration::from_millis(200));
-        let handshake_latencies_median = math::median_nonempty(&mut handshake_latencies);
-        let tcp_connect_median = math::median_nonempty(&mut tcp_connect_latencies);
-        sleep(Duration::from_secs(1));
-        spinner.finish_and_clear();
-        println!(
-            "handshake_latencies_median: {:?}ms",
-            handshake_latencies_median
-        );
-        println!("tcp_connect_median: {:?}ms", tcp_connect_median);
+        spinner.set_message(format!(
+            "TLS Handshaks: {} | errors: {} | success ratio {}%",
+            handshakes_count, err_count, handshakes_count as f32/(err_count+handshakes_count) as f32 * 100.0
+        ));
+        spinner.finish();
+        render_stats_table(&mut handshake_latencies, &mut tcp_connect_latencies);
     });
 
     let mut tls_config = tls::tls_config(Some(cli.zero_rtt), Some(&[&rustls::version::TLS12]));
