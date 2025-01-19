@@ -48,7 +48,7 @@ struct Cli {
     concurrently: usize,
 
     /// Timeout of tcp connection & tls handshake in miliseconds
-    #[arg(long, default_value_t = 1000)]
+    #[arg(long, default_value_t = 500)]
     timeout_ms: u64,
 
     /// Maximum TLS handshakes per seconds
@@ -116,25 +116,34 @@ async fn main() -> io::Result<()> {
         let mut handshake_latencies: Vec<u128> = Vec::new();
         let mut tcp_connect_latencies: Vec<u128> = Vec::new();
 
+        let now = Instant::now();
+        let mut throughput = 0;
         while let Some(data) = rx.blocking_recv() {
             spinner.tick();
+            let elapsed_secs = now.elapsed().as_secs_f32();
+            throughput = (handshakes_count as f32/elapsed_secs).ceil() as u128;
             spinner.set_message(format!(
-                "TLS Handshaks: {} | errors: {}",
-                handshakes_count, err_count
+                "TLS Handshaks: {} | errors: {} | throughput {} h/s | duration {:.2}s",
+                handshakes_count, err_count, throughput, elapsed_secs
             ));
+
             if data.is_err() {
                 err_count += 1;
-                continue;
+            } else {
+                handshakes_count += 1;
+                let latencies = data.unwrap();
+                handshake_latencies.push(latencies.handshake.as_millis());
+                tcp_connect_latencies.push(latencies.tcp_connect.as_millis());
             }
-
-            handshakes_count += 1;
-            let latencies = data.unwrap();
-            handshake_latencies.push(latencies.handshake.as_millis());
-            tcp_connect_latencies.push(latencies.tcp_connect.as_millis());
         }
+        let duration = now.elapsed().as_secs_f32();
         spinner.set_message(format!(
-            "TLS Handshaks: {} | errors: {} | success ratio {}%",
-            handshakes_count, err_count, handshakes_count as f32/(err_count+handshakes_count) as f32 * 100.0
+            "TLS Handshaks: {} | errors: {} | throughput {} h/s | duration {}s | success ratio {}%",
+            handshakes_count,
+            err_count,
+            throughput,
+            handshakes_count as f32/(err_count+handshakes_count) as f32 * 100.0,
+            duration
         ));
         spinner.finish();
         render_stats_table(&mut handshake_latencies, &mut tcp_connect_latencies);
@@ -172,6 +181,10 @@ async fn main() -> io::Result<()> {
         let tx_result = tx.clone();
         tasks.spawn(async move {
             loop {
+                if cli.max_handshakes_per_second > 0 {
+                    throttle.lock().await.tick().await;
+                }
+
                 let result = tls::handshake_with_timeout(
                     host,
                     endpoint.port(),
@@ -183,16 +196,13 @@ async fn main() -> io::Result<()> {
 
                 let _ = tx_result.send(result);
 
-                if cli.max_handshakes_per_second > 0 {
-                    throttle.lock().await.tick().await;
-                }
-
                 if now.elapsed().as_secs() >= cli.duration {
                     break;
                 }
             }
         });
     }
+
 
     tasks.join_all().await;
     drop(tx);
