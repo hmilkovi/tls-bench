@@ -72,7 +72,7 @@ fn render_stats_table(handshake_latencies: &mut[u128], tcp_connect_latencies: &m
     handshake_latencies.sort();
     tcp_connect_latencies.sort();
     let mut table = Table::new();
-    let header = vec!["Latencies", "Min", "AVG","50th percentile/mean", "95th percentile", "99th percentile", "Max"];
+    let header = vec!["Latencies", "Min", "AVG","50%’ile", "95%’ile", "99%’ile", "99.9%’ile", "Max"];
     table
         .set_header(header)
         .add_row(vec![
@@ -82,6 +82,7 @@ fn render_stats_table(handshake_latencies: &mut[u128], tcp_connect_latencies: &m
             format!("{}ms", math::percentile(handshake_latencies, 50.0) as f32),
             format!("{}ms", math::percentile(handshake_latencies, 95.0) as f32),
             format!("{}ms", math::percentile(handshake_latencies, 99.0) as f32),
+            format!("{}ms", math::percentile(handshake_latencies, 99.9) as f32),
             format!("{}ms", handshake_latencies.last().unwrap()),
         ])
         .add_row(vec![
@@ -91,6 +92,7 @@ fn render_stats_table(handshake_latencies: &mut[u128], tcp_connect_latencies: &m
             format!("{}ms", math::percentile(tcp_connect_latencies, 50.0) as f32),
             format!("{}ms", math::percentile(tcp_connect_latencies, 95.0) as f32),
             format!("{}ms", math::percentile(tcp_connect_latencies, 99.0) as f32),
+            format!("{}ms", math::percentile(tcp_connect_latencies, 99.9) as f32),
             format!("{}ms", tcp_connect_latencies.last().unwrap()),
         ]);
 
