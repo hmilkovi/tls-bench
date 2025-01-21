@@ -27,11 +27,11 @@ struct Cli {
     #[arg(short, long)]
     endpoint: String,
 
-    /// Protocol to use when runing TLS benchmark
+    /// Protocol to use when running TLS benchmark
     #[arg(short, value_enum, default_value_t = Protocol::Tcp)]
     protocol: Protocol,
 
-    /// TLS version number, supported are v1.2 and v1.3
+    /// TLS version number
     #[arg(short, value_enum, default_value_t = TlsVersion::Tls12)]
     tls_version: TlsVersion,
 
@@ -142,8 +142,8 @@ async fn main() -> io::Result<()> {
             handshakes_count,
             err_count,
             throughput,
-            handshakes_count as f32/(err_count+handshakes_count) as f32 * 100.0,
-            duration
+            duration,
+            handshakes_count as f32/(err_count+handshakes_count) as f32 * 100.0
         ));
         spinner.finish();
         render_stats_table(&mut handshake_latencies, &mut tcp_connect_latencies);
