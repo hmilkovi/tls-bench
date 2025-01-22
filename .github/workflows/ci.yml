@@ -18,7 +18,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout the repository
+        uses: actions/checkout@v4
       - name: Run Clippy
         run: cargo clippy --release --all-targets --all-features -- --deny warnings
       - name: Build
