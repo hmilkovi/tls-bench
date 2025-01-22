@@ -1,20 +1,27 @@
-name: Cargo Build & Test
+name: CI
 
 on:
   push:
     branches: ["main"]
   pull_request:
     branches: ["main"]
+    paths-ignore:
+      - "LICENSE"
+      - "README.md"
 
 env:
   CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  RUST_BACKTRACE: 1
+  RUSTFLAGS: "-Dwarnings"
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
+      - name: Run Clippy
+        run: cargo clippy --release --all-targets --all-features -- --deny warnings
       - name: Build
         run: cargo build --verbose
       - name: Run tests

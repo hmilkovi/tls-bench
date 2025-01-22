@@ -6,7 +6,6 @@ use std::{
     sync::Arc,
     thread::available_parallelism,
     time::Duration,
-    u128,
 };
 use tokio::{
     net,
@@ -152,23 +151,18 @@ async fn main() -> io::Result<()> {
     });
 
     let mut tls_config = tls::tls_config(Some(cli.zero_rtt), Some(&[&rustls::version::TLS12]));
-    match cli.tls_version {
-        TlsVersion::Tls13 => {
-            tls_config = tls::tls_config(Some(cli.zero_rtt), Some(&[&rustls::version::TLS13]));
-        }
-        _ => {}
+    if let TlsVersion::Tls13 = cli.tls_version {
+        tls_config = tls::tls_config(Some(cli.zero_rtt), Some(&[&rustls::version::TLS13]));
     }
 
     let mut is_smtp = false;
-    match cli.protocol {
-        Protocol::Smtp => is_smtp = true,
-        _ => {}
+    if let Protocol::Smtp = cli.protocol {
+        is_smtp = true;
     }
 
     let endpoint: SocketAddr = net::lookup_host(cli.endpoint)
         .await?
-        .into_iter()
-        .nth(0)
+        .next()
         .unwrap();
 
     let limiter_period = Duration::from_secs_f64(1.0 / cli.max_handshakes_per_second as f64);
