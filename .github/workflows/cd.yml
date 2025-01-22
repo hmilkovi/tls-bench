@@ -19,6 +19,10 @@ jobs:
         run: rustup target add x86_64-unknown-linux-musl x86_64-pc-windows-gnu
 
       - name: Build the executable
+        env:
+          HOST_CC: gcc
+          CC_x86_64_unknown_linux_gnu: /usr/bin/x86_64-linux-gnu-gcc
+          CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER: /usr/bin/x86_64-linux-gnu-gcc
         run: cargo build --release --target x86_64-unknown-linux-musl --target x86_64-pc-windows-gnu
 
       - name: Tar x86_64 binary
