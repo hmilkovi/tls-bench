@@ -124,7 +124,7 @@ async fn main() -> io::Result<()> {
             let elapsed_secs = now.elapsed().as_secs_f32();
             throughput = (handshakes_count as f32/elapsed_secs).ceil() as u128;
             spinner.set_message(format!(
-                "TLS Handshaks: {} | errors: {} | throughput {} h/s | duration {:.2}s",
+                "TLS handshakes: {} | errors: {} | throughput {} h/s | duration {:.2}s",
                 handshakes_count, err_count, throughput, elapsed_secs
             ));
 
@@ -139,7 +139,7 @@ async fn main() -> io::Result<()> {
         }
         let duration = now.elapsed().as_secs_f32();
         spinner.set_message(format!(
-            "TLS Handshaks: {} | errors: {} | throughput {} h/s | duration {}s | success ratio {}%",
+            "TLS handshakes: {} | errors: {} | throughput {} h/s | duration {}s | success ratio {}%",
             handshakes_count,
             err_count,
             throughput,

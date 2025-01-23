@@ -43,7 +43,7 @@ tls-bench -e 127.0.0.1:443 -t tls13 -c 10 -d 10 -m 20
 
 ## Output example
 ```console
-⢁ TLS Handshaks: 644 | errors: 0 | throughput 158 h/s | duration 4.073427s | success ratio 100%
+⢁ TLS handshakes: 644 | errors: 0 | throughput 158 h/s | duration 4.073427s | success ratio 100%
 +---------------+------+-------------+---------+---------+---------+-----------+------+
 | Latencies     | Min  | AVG         | 50%’ile | 95%’ile | 99%’ile | 99.9%’ile | Max  |
 +=====================================================================================+
