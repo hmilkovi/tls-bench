@@ -41,15 +41,16 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
+      - name: Install Linux dependencies
+        run: sudo apt-get install --yes --no-install-recommends musl-tools
+        if: ${{ matrix.os }} == 'ubuntu-latest'
+
       - name: Build
         run: cargo build --verbose --release --target ${{ matrix.target }}
 
       - name: Build archive
         shell: bash
         run: |
-          if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
-            sudo apt-get install --yes --no-install-recommends musl-tools
-          fi
           binary_name="tls-bench"
           dirname="$binary_name-${{ env.VERSION }}-${{ matrix.target }}"
           mkdir "$dirname"
