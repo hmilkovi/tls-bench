@@ -55,7 +55,12 @@ Options:
 Get them [here](https://github.com/hmilkovi/tls-bench/releases).
 
 ## Feature Roadmap
+Rough sketch of feature roadmap that will be implemented:
 - [ ] Create Docker image
 - [ ] Create Homebrew formula
 - [ ] Prometheus support
 - [ ] Add ramp-up patterns
+- [ ] Allow usage as library
+
+## License
+See [LICENSE](LICENSE).

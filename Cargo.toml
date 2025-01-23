@@ -2,7 +2,7 @@
 name = "tls-bench"
 version = "0.1.0"
 edition = "2021"
-description = "TLS benchmarking tool for evaluating server performance"
+description = "A TLS benchmarking tool for evaluating servers TLS handshake performance"
 authors = ["Hrvoje <hmilkovi@gmail.com>"]
 readme = "README.md"
 
