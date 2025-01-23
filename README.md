@@ -47,3 +47,14 @@ Options:
 | TCP Connect   | 13ms | 20.18789ms  | 20ms    | 26ms    | 36ms    | 49ms      | 49ms |
 +---------------+------+-------------+---------+---------+---------+-----------+------+
 ```
+
+## Install
+
+### Pre-compiled executables
+
+Get them [here](https://github.com/hmilkovi/tls-bench/releases).
+
+## Feature Roadmap
+- [ ] Create Homebrew formula
+- [ ] Prometheus support
+- [ ] Add ramp-up patterns
