@@ -63,4 +63,4 @@ Rough sketch of feature roadmap that will be implemented:
 - [ ] Allow usage as library
 
 ## License
-See [LICENSE](LICENSE).
+See [MIT](LICENSE).
