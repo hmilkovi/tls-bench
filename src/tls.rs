@@ -53,19 +53,18 @@ async fn handshake(
     let mut stream = TcpStream::connect((host, port)).await?;
     if is_smtp {
         let mut buffer = vec![0; 1024];
-        stream.read_exact(&mut buffer).await?;
+        stream.read_buf(&mut buffer).await?;
 
         stream
             .write_all(&format!("EHLO {}\r\n", host).into_bytes())
             .await?;
         stream.flush().await?;
-
-        stream.read_exact(&mut buffer).await?;
+        stream.read_buf(&mut buffer).await?;
 
         stream.write_all(b"STARTTLS\r\n").await?;
         stream.flush().await?;
 
-        stream.read_exact(&mut buffer).await?;
+        stream.read_buf(&mut buffer).await?;
 
         let str_buffer = String::from_utf8_lossy(&buffer);
         if !str_buffer.contains("220") {
