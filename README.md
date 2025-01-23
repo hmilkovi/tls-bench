@@ -55,6 +55,7 @@ Options:
 Get them [here](https://github.com/hmilkovi/tls-bench/releases).
 
 ## Feature Roadmap
+- [ ] Create Docker image
 - [ ] Create Homebrew formula
 - [ ] Prometheus support
 - [ ] Add ramp-up patterns
