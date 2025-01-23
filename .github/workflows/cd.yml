@@ -47,6 +47,9 @@ jobs:
       - name: Build archive
         shell: bash
         run: |
+          if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
+            sudo apt-get install --yes --no-install-recommends musl-tools
+          fi
           binary_name="tls-bench"
           dirname="$binary_name-${{ env.VERSION }}-${{ matrix.target }}"
           mkdir "$dirname"
