@@ -8,6 +8,8 @@ on:
 jobs:
   linux_windows:
     runs-on: ubuntu-latest
+    env:
+      CMAKE_ASM_NASM_COMPILER: /usr/bin/nasm
     steps:
       - name: Checkout the repository
         uses: actions/checkout@v4
