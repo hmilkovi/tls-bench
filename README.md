@@ -59,7 +59,8 @@ Rough sketch of feature roadmap that will be implemented:
 - [ ] Create Docker image
 - [ ] Create Homebrew formula
 - [ ] Prometheus support
-- [ ] Add ramp-up patterns
+- [ ] Add ramp-up
+- [ ] Add load patterns
 - [ ] Allow usage as library
 
 ## License
