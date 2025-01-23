@@ -6,42 +6,31 @@ on:
       - created
 
 jobs:
-  linux_windows:
+  linux:
     runs-on: ubuntu-latest
-    env:
-      CMAKE_ASM_NASM_COMPILER: /usr/bin/nasm
     steps:
       - name: Checkout the repository
         uses: actions/checkout@v4
 
-      - name: Install Linux and Windows Cross Compilers
-        run: sudo apt-get update && sudo apt-get install --yes --no-install-recommends build-essential nasm musl-tools gcc-mingw-w64-x86-64-win32
-
       - name: Install rustup targets
-        run: rustup target add x86_64-unknown-linux-musl x86_64-pc-windows-gnu
+        run: rustup target add x86_64-unknown-linux-musl
 
       - name: Build the executable
-        run: cargo build --release --target x86_64-unknown-linux-musl --target x86_64-pc-windows-gnu
+        run: cargo build --release --target x86_64-unknown-linux-musl
 
       - name: Tar x86_64 binary
         run: tar -czvf tls-bench-gnu-linux-x86_64.tar.gz -C target/x86_64-unknown-linux-musl/release tls-bench
 
-      - name: Zip windows binary
-        run: zip -j tls-bench-windows.zip target/x86_64-pc-windows-gnu/release/tls-bench.exe
-
       - name: Generate SHA256 checksums
         run: |
           shasum -a 256 tls-bench-gnu-linux-x86_64.tar.gz > tls-bench-gnu-linux-x86_64.tar.gz.sha256
-          shasum -a 256 tls-bench-windows.zip > tls-bench-windows.zip.sha256
 
       - name: Upload assets
         uses: alexellis/upload-assets@0.4.1
         with:
           asset_paths: |
             tls-bench-gnu-linux-x86_64.tar.g
-            tls-bench-windows.zip
             tls-bench-gnu-linux-x86_64.tar.gz.sha256
-            tls-bench-windows.zip.sha256
         env:
           GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
 
