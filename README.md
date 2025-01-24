@@ -9,6 +9,14 @@
 
 A TLS benchmarking tool for evaluating servers TLS handshake performance
 
+## Motivation
+This tool was born from the need to load test latencies of TLS-terminating services such as reverse proxies and load balancers.
+
+This tool enables users to:
+* Compare latencies for different TLS-terminating balancers or reverse proxies.
+* Observe the impact of private key sizes on TLS handshake latencies and handshakes per second.
+* Replicate traffic patterns where TCP connections are short-lived, yet TLS is still necessary. This includes scenarios like the "thundering herd" effect, often observed in services handling affiliate links or URL shorteners, where a sudden surge of requests demands rapid TLS handshakes.
+
 ## Usage manual
 ```console
 Usage: tls-bench [OPTIONS] --endpoint <ENDPOINT>
