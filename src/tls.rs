@@ -28,7 +28,7 @@ pub fn tls_config(
     root_cert_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
 
     let mut config = ClientConfig::builder_with_protocol_versions(
-        supported_tls_version.unwrap_or(rustls::ALL_VERSIONS)
+        supported_tls_version.unwrap_or(rustls::ALL_VERSIONS),
     )
     .with_root_certificates(root_cert_store)
     .with_no_client_auth();
@@ -80,9 +80,7 @@ async fn handshake(
 
     let tls_connector = TlsConnector::from(Arc::new(tls_config));
     let handshake_now = Instant::now();
-    let mut tls_stream = tls_connector
-        .connect(domain.to_owned(), stream)
-        .await?;
+    let mut tls_stream = tls_connector.connect(domain.to_owned(), stream).await?;
     let handshake_duration = handshake_now.elapsed();
 
     tls_stream.shutdown().await?;

@@ -1,19 +1,13 @@
 use clap::Parser;
+use comfy_table::Table;
 use indicatif::{ProgressBar, ProgressStyle};
-use std::{
-    io,
-    net::SocketAddr,
-    sync::Arc,
-    thread::available_parallelism,
-    time::Duration,
-};
+use std::{io, net::SocketAddr, sync::Arc, thread::available_parallelism, time::Duration};
 use tokio::{
     net,
     sync::{mpsc, Mutex},
     task,
     time::{interval, Instant},
 };
-use comfy_table::Table;
 
 mod math;
 mod tls;
@@ -67,11 +61,20 @@ enum TlsVersion {
     Tls13,
 }
 
-fn render_stats_table(handshake_latencies: &mut[u128], tcp_connect_latencies: &mut[u128]) {
+fn render_stats_table(handshake_latencies: &mut [u128], tcp_connect_latencies: &mut [u128]) {
     handshake_latencies.sort();
     tcp_connect_latencies.sort();
     let mut table = Table::new();
-    let header = vec!["Latencies", "Min", "AVG","50%’ile", "95%’ile", "99%’ile", "99.9%’ile", "Max"];
+    let header = vec![
+        "Latencies",
+        "Min",
+        "AVG",
+        "50%’ile",
+        "95%’ile",
+        "99%’ile",
+        "99.9%’ile",
+        "Max",
+    ];
     table
         .set_header(header)
         .add_row(vec![
@@ -104,11 +107,9 @@ async fn main() -> io::Result<()> {
     let (tx, mut rx) = mpsc::unbounded_channel::<Result<tls::TlsDuration, std::io::Error>>();
 
     let sync_worker = task::spawn_blocking(move || {
-        let spinner_style = ProgressStyle::with_template(
-            "{prefix:.bold.dim} {spinner} {wide_msg}",
-        )
-        .unwrap()
-        .tick_chars("⠁⠂⠄⡀⡈⡐⡠⣀⣁⣂⣄⣌⣔⣤⣥⣦⣮⣶⣷⣿⡿⠿⢟⠟⡛⠛⠫⢋⠋⠍⡉⠉⠑⠡⢁");
+        let spinner_style = ProgressStyle::with_template("{prefix:.bold.dim} {spinner} {wide_msg}")
+            .unwrap()
+            .tick_chars("⠁⠂⠄⡀⡈⡐⡠⣀⣁⣂⣄⣌⣔⣤⣥⣦⣮⣶⣷⣿⡿⠿⢟⠟⡛⠛⠫⢋⠋⠍⡉⠉⠑⠡⢁");
         let spinner = ProgressBar::new_spinner();
         spinner.set_style(spinner_style);
 
@@ -122,7 +123,7 @@ async fn main() -> io::Result<()> {
         while let Some(data) = rx.blocking_recv() {
             spinner.tick();
             let elapsed_secs = now.elapsed().as_secs_f32();
-            throughput = (handshakes_count as f32/elapsed_secs).ceil() as u128;
+            throughput = (handshakes_count as f32 / elapsed_secs).ceil() as u128;
             spinner.set_message(format!(
                 "TLS handshakes: {} | errors: {} | throughput {} h/s | duration {:.2}s",
                 handshakes_count, err_count, throughput, elapsed_secs
@@ -160,10 +161,7 @@ async fn main() -> io::Result<()> {
         is_smtp = true;
     }
 
-    let endpoint: SocketAddr = net::lookup_host(cli.endpoint)
-        .await?
-        .next()
-        .unwrap();
+    let endpoint: SocketAddr = net::lookup_host(cli.endpoint).await?.next().unwrap();
 
     let limiter_period = Duration::from_secs_f64(1.0 / cli.max_handshakes_per_second as f64);
     let rate_limiter = Arc::new(Mutex::new(interval(limiter_period)));
@@ -198,7 +196,6 @@ async fn main() -> io::Result<()> {
             }
         });
     }
-
 
     tasks.join_all().await;
     drop(tx);

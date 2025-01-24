@@ -7,8 +7,11 @@ pub fn avg(data: &[u128]) -> f32 {
     data.iter().sum::<u128>() as f32 / len as f32
 }
 
-pub fn percentile(data: &mut[u128], percent: f64) -> f64 {
-    assert!(100.0 <= percent || percent > 0.0, "Percentage is out of bounds");
+pub fn percentile(data: &mut [u128], percent: f64) -> f64 {
+    assert!(
+        100.0 <= percent || percent > 0.0,
+        "Percentage is out of bounds"
+    );
 
     let len = data.len();
     assert!(len > 0, "List can not be empty");
@@ -19,10 +22,10 @@ pub fn percentile(data: &mut[u128], percent: f64) -> f64 {
 
     data.sort();
     if percent == 100.0 {
-        return  *data.last().unwrap() as f64;
+        return *data.last().unwrap() as f64;
     }
 
-    let idx = (len - 1) as f64 * percent/100.0;
+    let idx = (len - 1) as f64 * percent / 100.0;
     let floor = idx.floor();
     let ceil = idx.ceil();
     if floor == ceil {
@@ -52,7 +55,10 @@ mod tests {
         assert_eq!(percentile(&mut [1, 4, 5, 10, 99], 95.00), 81.19999999999999);
         assert_eq!(percentile(&mut [1, 4, 99, 5, 10], 95.00), 81.19999999999999);
 
-        let mut data = vec![33, 33, 33, 33, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 35, 35, 35, 35, 35, 36, 37, 37, 38, 39, 40, 43, 47, 48, 48, 49, 54, 54, 54, 54, 54, 54];
+        let mut data = vec![
+            33, 33, 33, 33, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 35, 35, 35, 35, 35, 36, 37,
+            37, 38, 39, 40, 43, 47, 48, 48, 49, 54, 54, 54, 54, 54, 54,
+        ];
         assert_eq!(percentile(&mut data, 50.00), 35.);
     }
 
