@@ -58,7 +58,7 @@ jobs:
           tar -czf "$dirname.tar.gz" "$dirname"
           shasum -a 256 "$dirname.tar.gz" > "$dirname.tar.gz.sha256"
           echo "ASSET=$dirname.tar.gz" >> $GITHUB_ENV
-          echo "ASSET_SHA256=$dirname.tar.gz" >> $GITHUB_ENV
+          echo "ASSET_SHA256=$dirname.tar.gz.sha256" >> $GITHUB_ENV
 
       - name: Release
         uses: softprops/action-gh-release@v2
