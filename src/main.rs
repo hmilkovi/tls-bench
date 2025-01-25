@@ -1,13 +1,15 @@
 use clap::Parser;
 use comfy_table::Table;
 use indicatif::{ProgressBar, ProgressStyle};
+use rustls::ClientConfig;
 use std::{io, net::SocketAddr, sync::Arc, thread::available_parallelism, time::Duration};
 use tokio::{
     net,
     sync::{mpsc, Mutex},
     task,
-    time::{interval, Instant},
+    time::{interval, Instant, Interval},
 };
+use tokio_util::sync::CancellationToken;
 
 mod math;
 mod tls;
@@ -62,6 +64,14 @@ enum TlsVersion {
 }
 
 fn render_stats_table(handshake_latencies: &mut [u128], tcp_connect_latencies: &mut [u128]) {
+    assert!(
+        handshake_latencies.len() > 0,
+        "List of handshake latencies can not be empty"
+    );
+    assert!(
+        tcp_connect_latencies.len() > 0,
+        "List of tcp connect latencies can not be empty"
+    );
     handshake_latencies.sort();
     tcp_connect_latencies.sort();
     let mut table = Table::new();
@@ -101,55 +111,86 @@ fn render_stats_table(handshake_latencies: &mut [u128], tcp_connect_latencies: &
     println!("{table}");
 }
 
+fn sync_worker(
+    duration: u64,
+    concurrently: usize,
+    mut rx: mpsc::UnboundedReceiver<Result<tls::TlsDuration, io::Error>>,
+    token: CancellationToken,
+) {
+    let spinner_style = ProgressStyle::with_template("{prefix:.bold.dim} {spinner} {wide_msg}")
+        .unwrap()
+        .tick_chars("⠁⠂⠄⡀⡈⡐⡠⣀⣁⣂⣄⣌⣔⣤⣥⣦⣮⣶⣷⣿⡿⠿⢟⠟⡛⠛⠫⢋⠋⠍⡉⠉⠑⠡⢁");
+    let spinner = ProgressBar::new_spinner();
+    spinner.set_style(spinner_style);
+
+    let mut err_count: u128 = 0;
+    let mut handshakes_count: u128 = 0;
+    let mut handshake_latencies: Vec<u128> = Vec::new();
+    let mut tcp_connect_latencies: Vec<u128> = Vec::new();
+
+    let mut throughput = 0;
+    let mut elapsed_secs = 0.0;
+    let now = Instant::now();
+    while let Some(data) = rx.blocking_recv() {
+        spinner.tick();
+        elapsed_secs = now.elapsed().as_secs_f32();
+        if (duration > 0 && elapsed_secs >= duration as f32)
+            || (duration == 0 && err_count + handshakes_count >= concurrently.try_into().unwrap())
+        {
+            token.cancel();
+            break;
+        }
+        throughput = (handshakes_count as f32 / elapsed_secs).ceil() as u128;
+        spinner.set_message(format!(
+            "TLS handshakes: {} | errors: {} | throughput {} h/s | duration {:.2}s",
+            handshakes_count, err_count, throughput, elapsed_secs
+        ));
+
+        if data.is_err() {
+            err_count += 1;
+        } else {
+            handshakes_count += 1;
+            let latencies = data.unwrap();
+            handshake_latencies.push(latencies.handshake.as_millis());
+            tcp_connect_latencies.push(latencies.tcp_connect.as_millis());
+        }
+    }
+
+    spinner.finish_with_message(format!(
+        "TLS handshakes: {} | errors: {} | throughput {} h/s | duration {:.2}s | success ratio {}%",
+        handshakes_count,
+        err_count,
+        throughput,
+        elapsed_secs,
+        handshakes_count as f32 / (err_count + handshakes_count) as f32 * 100.0
+    ));
+    render_stats_table(&mut handshake_latencies, &mut tcp_connect_latencies);
+}
+
+async fn worker(
+    throttle: Arc<Mutex<Interval>>,
+    endpoint: SocketAddr,
+    timeout_ms: u64,
+    is_smtp: bool,
+    tls_config: ClientConfig,
+    tx_result: mpsc::UnboundedSender<Result<tls::TlsDuration, io::Error>>,
+) {
+    throttle.lock().await.tick().await;
+    let result = tls::handshake_with_timeout(
+        endpoint.ip(),
+        endpoint.port(),
+        is_smtp,
+        tls_config,
+        timeout_ms,
+    )
+    .await;
+
+    let _ = tx_result.send(result);
+}
+
 #[tokio::main]
 async fn main() -> io::Result<()> {
     let cli = Cli::parse();
-    let (tx, mut rx) = mpsc::unbounded_channel::<Result<tls::TlsDuration, std::io::Error>>();
-
-    let sync_worker = task::spawn_blocking(move || {
-        let spinner_style = ProgressStyle::with_template("{prefix:.bold.dim} {spinner} {wide_msg}")
-            .unwrap()
-            .tick_chars("⠁⠂⠄⡀⡈⡐⡠⣀⣁⣂⣄⣌⣔⣤⣥⣦⣮⣶⣷⣿⡿⠿⢟⠟⡛⠛⠫⢋⠋⠍⡉⠉⠑⠡⢁");
-        let spinner = ProgressBar::new_spinner();
-        spinner.set_style(spinner_style);
-
-        let mut err_count: u128 = 0;
-        let mut handshakes_count: u128 = 0;
-        let mut handshake_latencies: Vec<u128> = Vec::new();
-        let mut tcp_connect_latencies: Vec<u128> = Vec::new();
-
-        let now = Instant::now();
-        let mut throughput = 0;
-        while let Some(data) = rx.blocking_recv() {
-            spinner.tick();
-            let elapsed_secs = now.elapsed().as_secs_f32();
-            throughput = (handshakes_count as f32 / elapsed_secs).ceil() as u128;
-            spinner.set_message(format!(
-                "TLS handshakes: {} | errors: {} | throughput {} h/s | duration {:.2}s",
-                handshakes_count, err_count, throughput, elapsed_secs
-            ));
-
-            if data.is_err() {
-                err_count += 1;
-            } else {
-                handshakes_count += 1;
-                let latencies = data.unwrap();
-                handshake_latencies.push(latencies.handshake.as_millis());
-                tcp_connect_latencies.push(latencies.tcp_connect.as_millis());
-            }
-        }
-        let duration = now.elapsed().as_secs_f32();
-        spinner.set_message(format!(
-            "TLS handshakes: {} | errors: {} | throughput {} h/s | duration {}s | success ratio {}%",
-            handshakes_count,
-            err_count,
-            throughput,
-            duration,
-            handshakes_count as f32/(err_count+handshakes_count) as f32 * 100.0
-        ));
-        spinner.finish();
-        render_stats_table(&mut handshake_latencies, &mut tcp_connect_latencies);
-    });
 
     let mut tls_config = tls::tls_config(Some(cli.zero_rtt), Some(&[&rustls::version::TLS12]));
     if let TlsVersion::Tls13 = cli.tls_version {
@@ -162,44 +203,34 @@ async fn main() -> io::Result<()> {
     }
 
     let endpoint: SocketAddr = net::lookup_host(cli.endpoint).await?.next().unwrap();
-
     let limiter_period = Duration::from_secs_f64(1.0 / cli.max_handshakes_per_second as f64);
     let rate_limiter = Arc::new(Mutex::new(interval(limiter_period)));
 
+    let (tx, rx) = mpsc::unbounded_channel::<Result<tls::TlsDuration, std::io::Error>>();
+    let token = CancellationToken::new();
+    let cancel_token = token.clone();
     let mut tasks = task::JoinSet::new();
+    tasks.spawn_blocking(move || sync_worker(cli.duration, cli.concurrently, rx, cancel_token));
+
     for _ in 0..cli.concurrently {
         let local_tls_config = tls_config.clone();
         let throttle = Arc::clone(&rate_limiter);
-        let now = Instant::now();
-        let host = endpoint.ip();
+        let local_token = token.clone();
         let tx_result = tx.clone();
         tasks.spawn(async move {
             loop {
-                if cli.max_handshakes_per_second > 0 {
-                    throttle.lock().await.tick().await;
+                tokio::select! {
+                    _ = local_token.cancelled() => {
+                        break;
+                    },
+                    _ = worker(throttle.clone(), endpoint, cli.timeout_ms, is_smtp, local_tls_config.clone(), tx_result.clone()) => {}
                 }
 
-                let result = tls::handshake_with_timeout(
-                    host,
-                    endpoint.port(),
-                    is_smtp,
-                    local_tls_config.clone(),
-                    cli.timeout_ms,
-                )
-                .await;
-
-                let _ = tx_result.send(result);
-
-                if now.elapsed().as_secs() >= cli.duration {
-                    break;
-                }
             }
         });
     }
 
     tasks.join_all().await;
-    drop(tx);
-    sync_worker.await?;
 
     Ok(())
 }
