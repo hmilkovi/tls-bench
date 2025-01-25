@@ -65,11 +65,11 @@ enum TlsVersion {
 
 fn render_stats_table(handshake_latencies: &mut [u128], tcp_connect_latencies: &mut [u128]) {
     assert!(
-        handshake_latencies.len() > 0,
+        !handshake_latencies.is_empty(),
         "List of handshake latencies can not be empty"
     );
     assert!(
-        tcp_connect_latencies.len() > 0,
+        !tcp_connect_latencies.is_empty(),
         "List of tcp connect latencies can not be empty"
     );
     handshake_latencies.sort();
