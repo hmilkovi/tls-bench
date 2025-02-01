@@ -67,10 +67,15 @@ tls-bench -e 127.0.0.1:443 -t tls13 -c 10 -d 10 -m 20
 
 Get them [here](https://github.com/hmilkovi/tls-bench/releases).
 
+## Homebrew
+```console
+brew install hmilkovi/tap/tls-bench
+```
+
 ## Feature Roadmap
 Rough sketch of feature roadmap that will be implemented:
 - [ ] Create Docker image
-- [ ] Create Homebrew formula
+- [x] Create Homebrew formula
 - [ ] Prometheus support
 - [ ] Add ramp-up
 - [ ] Add load patterns
