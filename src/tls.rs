@@ -1,18 +1,21 @@
 mod verify;
 
-use rustls::crypto::aws_lc_rs as provider;
-use rustls::pki_types::ServerName;
-use rustls::SupportedProtocolVersion;
-use tokio_rustls::rustls::{ClientConfig, RootCertStore};
-use tokio_rustls::TlsConnector;
-
-use std::io::{Error, ErrorKind};
-use std::net::IpAddr;
-use std::sync::Arc;
-
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::TcpStream;
-use tokio::time::{timeout, Duration, Instant};
+use rustls::{crypto::aws_lc_rs as provider, pki_types::ServerName, SupportedProtocolVersion};
+use std::{
+    io::{Error, ErrorKind},
+    net::{IpAddr, SocketAddr},
+    sync::Arc,
+};
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    net::TcpStream,
+    sync::mpsc,
+    time::{timeout, Duration, Instant},
+};
+use tokio_rustls::{
+    rustls::{ClientConfig, RootCertStore},
+    TlsConnector,
+};
 
 #[derive(Debug)]
 pub struct TlsDuration {
@@ -91,7 +94,7 @@ async fn handshake(
     })
 }
 
-pub async fn handshake_with_timeout(
+async fn handshake_with_timeout(
     host: IpAddr,
     port: u16,
     is_smtp: bool,
@@ -103,6 +106,25 @@ pub async fn handshake_with_timeout(
         handshake(host, port, is_smtp, tls_config),
     );
     handshake_timeout.await?
+}
+
+pub async fn tls_handshaker(
+    endpoint: SocketAddr,
+    timeout_ms: u64,
+    is_smtp: bool,
+    tls_config: ClientConfig,
+    tx_result: mpsc::UnboundedSender<Result<TlsDuration, Error>>,
+) {
+    let result = handshake_with_timeout(
+        endpoint.ip(),
+        endpoint.port(),
+        is_smtp,
+        tls_config,
+        timeout_ms,
+    )
+    .await;
+
+    let _ = tx_result.send(result);
 }
 
 #[cfg(test)]
