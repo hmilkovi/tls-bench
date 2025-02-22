@@ -44,6 +44,10 @@ struct Cli {
     /// Maximum TLS handshakes per seconds
     #[arg(short, long, default_value_t = 1000)]
     max_handshakes_per_second: u64,
+
+    /// Ramp up seconds, eatch step up per second is calculated = max_handshakes_per_second * elapsed_seconds / ramp_up_sec
+    #[arg(short, long, default_value_t = 0)]
+    ramp_up_sec: u64,
 }
 
 #[derive(clap::ValueEnum, Clone)]
@@ -79,7 +83,13 @@ async fn main() -> io::Result<()> {
     let cancel_token = token.clone();
     let mut tasks = task::JoinSet::new();
     tasks.spawn_blocking(move || {
-        cli::show_progress_and_stats(cli.duration, cli.concurrently, rx, cancel_token)
+        cli::show_progress_and_stats(
+            cli.duration,
+            cli.ramp_up_sec,
+            cli.concurrently,
+            rx,
+            cancel_token,
+        )
     });
 
     let traffic_controller = Arc::new(
@@ -106,7 +116,7 @@ async fn main() -> io::Result<()> {
     }
 
     tasks.spawn(async move {
-        traffic_controller.flow(token).await;
+        traffic_controller.flow(cli.ramp_up_sec, token).await;
     });
 
     tasks.join_all().await;

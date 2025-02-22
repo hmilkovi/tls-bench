@@ -57,6 +57,7 @@ fn render_stats_table(handshake_latencies: &mut [u128], tcp_connect_latencies: &
 
 pub fn show_progress_and_stats(
     duration: u64,
+    ramp_up_sec: u64,
     concurrently: usize,
     mut rx: mpsc::UnboundedReceiver<Result<tls::TlsDuration, io::Error>>,
     token: CancellationToken,
@@ -71,20 +72,24 @@ pub fn show_progress_and_stats(
     let mut handshakes_count: u128 = 0;
     let mut handshake_latencies: Vec<u128> = Vec::new();
     let mut tcp_connect_latencies: Vec<u128> = Vec::new();
+    let mut ramp_up_reset_done = false;
 
     let mut throughput = 0;
     let mut elapsed_secs = 0.0;
     let now = Instant::now();
     while let Some(data) = rx.blocking_recv() {
         spinner.tick();
-        elapsed_secs = now.elapsed().as_secs_f32();
+        elapsed_secs = now.elapsed().as_secs_f32() - ramp_up_sec as f32;
         if (duration > 0 && elapsed_secs >= duration as f32)
-            || (duration == 0 && err_count + handshakes_count >= concurrently.try_into().unwrap())
+            || (duration == 0
+                && ramp_up_sec == 0
+                && err_count + handshakes_count >= concurrently.try_into().unwrap())
+            || (duration == 0 && elapsed_secs >= 0.0 && ramp_up_sec > 0)
         {
             token.cancel();
             break;
         }
-        throughput = (handshakes_count as f32 / elapsed_secs).ceil() as u128;
+
         spinner.set_message(format!(
             "TLS handshakes: {} | errors: {} | throughput {} h/s | duration {:.2}s",
             handshakes_count, err_count, throughput, elapsed_secs
@@ -92,12 +97,30 @@ pub fn show_progress_and_stats(
 
         if data.is_err() {
             err_count += 1;
-        } else {
-            handshakes_count += 1;
-            let latencies = data.unwrap();
-            handshake_latencies.push(latencies.handshake.as_millis());
-            tcp_connect_latencies.push(latencies.tcp_connect.as_millis());
+            continue;
         }
+
+        handshakes_count += 1;
+
+        let mut throughput_elapsed_sec = elapsed_secs;
+        if elapsed_secs <= 0.0 {
+            throughput_elapsed_sec = elapsed_secs + ramp_up_sec as f32;
+        }
+
+        throughput = (handshakes_count as f32 / throughput_elapsed_sec).ceil() as u128;
+
+        if duration > 0 && elapsed_secs >= 0.0 && !ramp_up_reset_done {
+            handshakes_count = 0;
+            ramp_up_reset_done = true;
+        }
+
+        let latencies = data.unwrap();
+        handshake_latencies.push(latencies.handshake.as_millis());
+        tcp_connect_latencies.push(latencies.tcp_connect.as_millis());
+    }
+
+    if ramp_up_sec > 0 {
+        elapsed_secs = elapsed_secs + ramp_up_sec as f32;
     }
 
     spinner.finish_with_message(format!(

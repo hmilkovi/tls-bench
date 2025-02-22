@@ -1,6 +1,6 @@
 use std::sync::Arc;
 use tokio::sync::Semaphore;
-use tokio::time::{interval, Duration};
+use tokio::time::{interval, Duration, Instant};
 
 use tokio_util::sync::CancellationToken;
 
@@ -22,9 +22,17 @@ impl TrafficController {
         Self { sem, capacity }
     }
 
-    pub async fn flow(&self, cancel_token: CancellationToken) {
+    pub async fn flow(&self, ramp_up_sec: u64, cancel_token: CancellationToken) {
         let mut update_interval = interval(Duration::from_secs_f64(1.0 / self.capacity as f64));
+        let inital_per_sec = 0.5;
+        if ramp_up_sec > 0 {
+            update_interval = interval(Duration::from_secs_f64(inital_per_sec));
+            update_interval.tick().await;
+        }
         update_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
+        let ramp_up_start = Instant::now();
+
         let local_token = cancel_token.clone();
         loop {
             tokio::select! {
@@ -34,6 +42,20 @@ impl TrafficController {
                 _ = update_interval.tick() => {
                     if self.sem.available_permits() < self.capacity {
                         self.sem.add_permits(1);
+                    }
+
+                    if ramp_up_sec > 0 {
+                        let elapsed_seconds = ramp_up_start.elapsed().as_secs_f64();
+                        if elapsed_seconds <= ramp_up_sec as f64 {
+                            let next_per_sec = 1.0 / ( self.capacity as f64 * elapsed_seconds/ramp_up_sec as f64);
+                            if next_per_sec < inital_per_sec {
+                                update_interval = interval(Duration::from_secs_f64(
+                                    next_per_sec
+                                ));
+                                update_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+                                update_interval.tick().await;
+                            }
+                        }
                     }
                 }
             }

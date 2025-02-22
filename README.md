@@ -34,11 +34,13 @@ Options:
   -d, --duration <DURATION>
           Duration of benchamrk test in seconds [default: 0]
   -c, --concurrently <CONCURRENTLY>
-          Max concurrently running workers, defaults to available_parallelism
+          Max concurrently running workers, defaults to available_parallelism [default: 10]
       --timeout-ms <TIMEOUT_MS>
           Timeout of tcp connection & tls handshake in miliseconds [default: 500]
   -m, --max-handshakes-per-second <MAX_HANDSHAKES_PER_SECOND>
           Maximum TLS handshakes per seconds [default: 1000]
+  -r, --ramp-up-sec <RAMP_UP_SEC>
+          Ramp up seconds, eatch step up per second is calculated = max_handshakes_per_second * elapsed_seconds / ramp_up_sec [default: 0]
   -h, --help
           Print help
   -V, --version
@@ -75,12 +77,10 @@ brew install hmilkovi/tap/tls-bench
 
 ## Feature Roadmap
 Rough sketch of feature roadmap that will be implemented:
-- [ ] Create Docker image
 - [x] Create Homebrew formula
 - [ ] Prometheus support
-- [ ] Add ramp-up
+- [x] Add ramp-up
 - [ ] Add load patterns
-- [ ] Allow usage as library
 
 ## License
 See [MIT](LICENSE).
