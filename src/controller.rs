@@ -87,7 +87,7 @@ mod tests {
         let local_controller = controller.clone();
         let local_cancel_token = cancel_token.clone();
         tokio::spawn(async move {
-            local_controller.flow(0.0 as f64, local_cancel_token).await;
+            local_controller.flow(0.0_f64, local_cancel_token).await;
         });
 
         sleep(Duration::from_millis(100)).await;
@@ -106,9 +106,7 @@ mod tests {
         let local_controller = controller.clone();
         let local_cancel_token = cancel_token.clone();
         tokio::spawn(async move {
-            local_controller
-                .flow(ramp_up_sec as f64, local_cancel_token)
-                .await;
+            local_controller.flow(ramp_up_sec, local_cancel_token).await;
         });
 
         let mut now = Instant::now();
