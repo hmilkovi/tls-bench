@@ -119,7 +119,7 @@ pub fn show_progress_and_stats(
         tcp_connect_latencies.push(latencies.tcp_connect.as_millis());
     }
 
-    if ramp_up_sec > 0 {
+    if ramp_up_sec > 0 && duration == 0 {
         elapsed_secs = elapsed_secs + ramp_up_sec as f32;
     }
 

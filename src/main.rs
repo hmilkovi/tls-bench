@@ -100,14 +100,14 @@ async fn main() -> io::Result<()> {
         let local_tls_config = tls_config.clone();
         let local_token = token.clone();
         let tx_result = tx.clone();
-        let traffic_controller = traffic_controller.clone();
+        let local_traffic_controller = traffic_controller.clone();
         tasks.spawn(async move {
             loop {
                 tokio::select! {
                     _ = local_token.cancelled() => {
                         break;
                     },
-                    _ = traffic_controller.acquire() => {
+                    _ = local_traffic_controller.acquire() => {
                         tls::tls_handshaker(endpoint, cli.timeout_ms, is_smtp, local_tls_config.clone(), tx_result.clone()).await;
                     }
                 }
@@ -116,7 +116,7 @@ async fn main() -> io::Result<()> {
     }
 
     tasks.spawn(async move {
-        traffic_controller.flow(cli.ramp_up_sec, token).await;
+        traffic_controller.flow(cli.ramp_up_sec as f64, token).await;
     });
 
     tasks.join_all().await;
