@@ -44,6 +44,10 @@ struct Cli {
     /// Maximum TLS handshakes per seconds
     #[arg(short, long, default_value_t = 1000)]
     max_handshakes_per_second: u64,
+
+    /// Ramp up seconds, eatch step up per second is calculated = max_handshakes_per_second * elapsed_seconds / ramp_up_sec
+    #[arg(short, long, default_value_t = 0)]
+    ramp_up_sec: u64,
 }
 
 #[derive(clap::ValueEnum, Clone)]
@@ -79,7 +83,13 @@ async fn main() -> io::Result<()> {
     let cancel_token = token.clone();
     let mut tasks = task::JoinSet::new();
     tasks.spawn_blocking(move || {
-        cli::show_progress_and_stats(cli.duration, cli.concurrently, rx, cancel_token)
+        cli::show_progress_and_stats(
+            cli.duration,
+            cli.ramp_up_sec,
+            cli.concurrently,
+            rx,
+            cancel_token,
+        )
     });
 
     let traffic_controller = Arc::new(
@@ -90,14 +100,14 @@ async fn main() -> io::Result<()> {
         let local_tls_config = tls_config.clone();
         let local_token = token.clone();
         let tx_result = tx.clone();
-        let traffic_controller = traffic_controller.clone();
+        let local_traffic_controller = traffic_controller.clone();
         tasks.spawn(async move {
             loop {
                 tokio::select! {
                     _ = local_token.cancelled() => {
                         break;
                     },
-                    _ = traffic_controller.acquire() => {
+                    _ = local_traffic_controller.acquire() => {
                         tls::tls_handshaker(endpoint, cli.timeout_ms, is_smtp, local_tls_config.clone(), tx_result.clone()).await;
                     }
                 }
@@ -106,7 +116,7 @@ async fn main() -> io::Result<()> {
     }
 
     tasks.spawn(async move {
-        traffic_controller.flow(token).await;
+        traffic_controller.flow(cli.ramp_up_sec as f64, token).await;
     });
 
     tasks.join_all().await;
