@@ -120,7 +120,7 @@ pub fn show_progress_and_stats(
     }
 
     if ramp_up_sec > 0 && duration == 0 {
-        elapsed_secs = elapsed_secs + ramp_up_sec as f32;
+        elapsed_secs += ramp_up_sec as f32;
     }
 
     spinner.finish_with_message(format!(
